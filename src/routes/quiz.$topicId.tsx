@@ -37,7 +37,7 @@ function Quiz() {
   const choose = (idx: number) => {
     if (picked !== null) return;
     setPicked(idx);
-    const next = [...answers, idx === qs[i].answer];
+    const next = [...answers, idx === qs[i]!.answer];
     setAnswers(next);
     if (next.length === qs.length) saveResult(topic.id, next.filter(Boolean).length, qs.length);
   };
@@ -88,7 +88,7 @@ function Quiz() {
             </ul>
           </div>
         ) : (
-          <QuestionCard key={i} n={i + 1} total={qs.length} q={qs[i]} picked={picked} onPick={choose} onNext={next} last={i === qs.length - 1} />
+          <QuestionCard key={i} n={i + 1} total={qs.length} q={qs[i]!} picked={picked} onPick={choose} onNext={next} last={i === qs.length - 1} />
         )}
       </div>
     </main>

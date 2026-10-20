@@ -26,7 +26,10 @@ function Index() {
   const totalQ = topics.reduce((s, t) => s + t.questions.length, 0);
   const correct = topics.reduce((s, t) => s + (progress[t.id]?.best ?? 0), 0);
   const pct = Math.round((correct / totalQ) * 100);
-  const weak = topics.filter((t) => progress[t.id] && progress[t.id].best / progress[t.id].total < 0.7);
+  const weak = topics.filter((t) => {
+    const r = progress[t.id];
+    return r && r.best / r.total < 0.7;
+  });
 
   return (
     <main className="min-h-screen">
