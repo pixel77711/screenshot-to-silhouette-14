@@ -55,7 +55,7 @@ button { font: inherit; cursor: pointer; }
 
 /* hero */
 .hero {
-  background: var(--ink) var(--hero);
+  background: var(--hero);
   color: var(--ink-foreground);
 }
 .hero .container { padding-top: 3.5rem; padding-bottom: 3.5rem; }

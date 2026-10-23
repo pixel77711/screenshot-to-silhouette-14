@@ -1,6 +1,6 @@
 const L = "https://learn.microsoft.com/en-us/training/";
 
-export const topics: Topic[] = [
+export const topics = [
   {
     id: "cloud-computing",
     domain: "Cloud concepts",
@@ -493,4 +493,4 @@ export const topics: Topic[] = [
 ];
 
 export const domains = Array.from(new Set(topics.map((t) => t.domain)));
-export const getTopic = (id: string) => topics.find((t) => t.id === id);
+export const getTopic = (id) => topics.find((t) => t.id === id);
