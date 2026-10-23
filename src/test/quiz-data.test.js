@@ -1,3 +1,4 @@
+import { describe, test, expect } from "vitest";
 import { topics, domains, getTopic } from "../data/quiz.js";
 
 describe("quiz data", () => {
