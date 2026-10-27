@@ -14,7 +14,7 @@ function readProgress() {
   }
 }
 
-function saveResult(id, score, total) {
+function saveResult(id, score, total, missed) {
   const all = readProgress();
   const prev = all[id];
   all[id] = {
@@ -22,7 +22,16 @@ function saveResult(id, score, total) {
     last: score,
     total,
     attempts: (prev?.attempts ?? 0) + 1,
+    missed: missed?.length ? missed : [],
   };
+  localStorage.setItem(PROGRESS_KEY, JSON.stringify(all));
+}
+
+function saveReviewResult(id, stillMissed) {
+  const all = readProgress();
+  const rec = all[id];
+  if (!rec) return;
+  rec.missed = stillMissed;
   localStorage.setItem(PROGRESS_KEY, JSON.stringify(all));
 }
 
@@ -118,6 +127,7 @@ function renderHome() {
                   <span class="${r ? (tp >= 70 ? "success strong" : "danger strong") : ""}">${r ? `Best ${tp}%` : "Not started"}</span>
                 </div>
                 <div class="bar thin"><div class="bar-fill ${tp >= 70 ? "success" : "primary"}" style="width:${tp}%"></div></div>
+                ${r?.missed?.length ? `<span class="review-link" data-topic="${t.id}">Review ${r.missed.length} missed →</span>` : ""}
               </a>`;
             }).join("")}
           </div>
@@ -133,33 +143,51 @@ function renderHome() {
       renderHome();
     });
   }
+
+  app.querySelectorAll(".review-link").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      location.hash = `#/quiz/${el.dataset.topic}/review`;
+    });
+  });
 }
 
 /* ---------- quiz ---------- */
 
 let quiz = null; // { topic, i, picked, answers }
 
-function startQuiz(topic) {
-  quiz = { topic, i: 0, picked: null, answers: [] };
+function startQuiz(topic, queue, review) {
+  quiz = {
+    topic,
+    i: 0,
+    picked: null,
+    answers: [],
+    queue: queue ?? topic.questions.map((_, idx) => idx),
+    review: !!review,
+  };
   renderQuiz();
 }
 
 function renderQuiz() {
-  const { topic, i, picked, answers } = quiz;
-  const qs = topic.questions;
+  const { topic, i, picked, answers, queue, review } = quiz;
+  const qs = queue.map((qIdx) => topic.questions[qIdx]);
   const done = answers.length === qs.length && picked === null;
   const score = answers.filter(Boolean).length;
-  document.title = `${topic.title} – AZ-900 Quiz`;
+  const stillMissed = queue.filter((_, k) => !answers[k]);
+  document.title = review
+    ? `Review – ${topic.title} – AZ-900 Quiz`
+    : `${topic.title} – AZ-900 Quiz`;
 
   app.innerHTML = `
     <main class="page">
       <header class="hero slim">
         <div class="container">
           <a class="back-link" href="#/">← All topics</a>
-          <p class="eyebrow">${esc(topic.domain)}</p>
+          <p class="eyebrow">${review ? "Review · " : ""}${esc(topic.domain)}</p>
           <h1>${esc(topic.title)}</h1>
+          ${review ? `<p class="hero-sub">Just the questions you missed on your last run. Get them right to clear them from your review list.</p>` : ""}
           <div class="segments">
-            ${qs.map((_, k) => `<div class="segment ${answers[k] === undefined ? "" : answers[k] ? "ok" : "bad"}"></div>`).join("")}
+            ${queue.map((_, k) => `<div class="segment ${answers[k] === undefined ? "" : answers[k] ? "ok" : "bad"}"></div>`).join("")}
           </div>
         </div>
       </header>
@@ -171,7 +199,14 @@ function renderQuiz() {
   `;
 
   if (done) {
-    document.getElementById("retake").addEventListener("click", () => startQuiz(topic));
+    const bind = (id, fn) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("click", fn);
+    };
+    bind("retake", () => startQuiz(topic));
+    bind("retake-missed", () => startQuiz(topic, stillMissed, true));
+    bind("review-again", () => startQuiz(topic, stillMissed, true));
+    bind("back-to-full", () => startQuiz(topic));
     return;
   }
 
@@ -179,9 +214,14 @@ function renderQuiz() {
     btn.addEventListener("click", () => {
       if (quiz.picked !== null) return;
       quiz.picked = Number(btn.dataset.idx);
-      const next = [...quiz.answers, quiz.picked === qs[quiz.i].answer];
+      const qIdx = quiz.queue[quiz.i];
+      const next = [...quiz.answers, quiz.picked === quiz.topic.questions[qIdx].answer];
       quiz.answers = next;
-      if (next.length === qs.length) saveResult(topic.id, next.filter(Boolean).length, qs.length);
+      if (next.length === qs.length) {
+        const missedNow = quiz.queue.filter((_, k) => !next[k]);
+        if (quiz.review) saveReviewResult(topic.id, missedNow);
+        else saveResult(topic.id, next.filter(Boolean).length, qs.length, missedNow);
+      }
       renderQuiz();
     });
   });
@@ -237,24 +277,36 @@ function questionHTML(q, n, total, picked) {
 }
 
 function resultsHTML(topic, score) {
-  const qs = topic.questions;
-  const p = pct(score, qs.length);
+  const { queue, review, answers } = quiz;
+  const total = queue.length;
+  const p = pct(score, total);
+  const stillMissed = queue.filter((_, k) => !answers[k]);
   return `
     <div class="card pad results rise">
-      <p class="muted small">Your score</p>
+      <p class="muted small">${review ? "Review score" : "Your score"}</p>
       <p class="score">${p}%</p>
-      <p class="muted">${score} of ${qs.length} correct</p>
-      <p>${score / qs.length >= 0.7 ? "Solid. You're on track for this topic." : "Review the explanations below, then try again."}</p>
+      <p class="muted">${score} of ${total} correct</p>
+      ${review
+        ? stillMissed.length
+          ? `<p>Progress. The ones still red are worth another look before retrying.</p>`
+          : `<p>Every question you had missed is now cleared. Great work.</p>`
+        : `<p>${score / total >= 0.7 ? "Solid. You're on track for this topic." : "Review the explanations below, then try again."}</p>`}
       <div class="results-actions">
-        <button class="btn ghost" id="retake">Retake</button>
-        <a class="btn primary" href="#/">All topics</a>
+        ${review
+          ? stillMissed.length
+            ? `<button class="btn primary" id="review-again">Try missed again</button><a class="btn ghost" href="#/quiz/${topic.id}">Full quiz</a>`
+            : `<button class="btn primary" id="back-to-full">Retake full quiz</button><a class="btn ghost" href="#/">All topics</a>`
+          : `<button class="btn ghost" id="retake">Retake</button>${stillMissed.length ? `<button class="btn primary" id="retake-missed">Review ${stillMissed.length} missed</button>` : ""}<a class="btn ghost" href="#/">All topics</a>`}
       </div>
       <ul class="review">
-        ${qs.map((q, k) => `
-          <li class="${quiz.answers[k] ? "good" : "poor"}">
-            <span class="strong">${quiz.answers[k] ? "✓" : "✗"} </span>${esc(q.q)}
-            ${!quiz.answers[k] ? `<p class="muted small">Answer: ${esc(q.options[q.answer])}</p>` : ""}
-          </li>`).join("")}
+        ${queue.map((qIdx, k) => {
+          const q = topic.questions[qIdx];
+          return `
+          <li class="${answers[k] ? "good" : "poor"}">
+            <span class="strong">${answers[k] ? "✓" : "✗"} </span>${esc(q.q)}
+            ${!answers[k] ? `<p class="muted small">Answer: ${esc(q.options[q.answer])}</p>` : ""}
+          </li>`;
+        }).join("")}
       </ul>
     </div>
   `;
@@ -263,12 +315,13 @@ function resultsHTML(topic, score) {
 /* ---------- router ---------- */
 
 function route() {
-  const m = location.hash.match(/^#\/quiz\/([\w-]+)\/?$/);
+  const m = location.hash.match(/^#\/quiz\/([\w-]+)(\/review)?\/?$/);
   if (m) {
     const topic = getTopic(m[1]);
     if (!topic) return renderNotFound();
-    if (!quiz || quiz.topic.id !== topic.id) startQuiz(topic);
-    else renderQuiz();
+    const missed = readProgress()[topic.id]?.missed ?? [];
+    const review = m[2] === "/review" && missed.length > 0;
+    startQuiz(topic, review ? [...missed] : undefined, review);
   } else {
     quiz = null;
     renderHome();
