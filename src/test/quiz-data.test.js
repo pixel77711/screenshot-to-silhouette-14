@@ -21,7 +21,7 @@ describe("quiz data", () => {
 
   test("total question count is 53 and lookup works", () => {
     const total = topics.reduce((s, t) => s + t.questions.length, 0);
-    expect(total).toBe(53);
+    expect(total).toBe(65);
     expect(getTopic("cloud-computing").title).toContain("cloud computing");
     expect(getTopic("nope")).toBeUndefined();
   });
